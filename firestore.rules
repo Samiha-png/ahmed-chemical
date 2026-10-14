@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isSuperAdmin() {
+      return isSignedIn() && userDoc().role == 'super_admin';
+    }
+    function isActive() {
+      return isSignedIn() && userDoc().active == true;
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow delete: if isSuperAdmin();
+    }
+
+    match /settings/{docId} {
+      allow read: if isActive();
+      allow write: if isSuperAdmin();
+    }
+
+    // Phase 4
+    match /categories/{id} {
+      allow read: if isActive();
+      allow write: if isSuperAdmin();
+    }
+    match /warehouses/{id} {
+      allow read: if isActive();
+      allow write: if isSuperAdmin();
+    }
+    match /products/{id} {
+      allow read: if isActive();
+      allow write: if isSuperAdmin();
+    }
+
+    // Phase 5
+    match /inventoryMovements/{id} {
+      allow read: if isActive();
+      allow create: if isActive();
+      allow update, delete: if false;
+    }
+    match /stockBalances/{id} {
+      allow read: if isActive();
+      allow create, update: if isActive();
+      allow delete: if isSuperAdmin();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
